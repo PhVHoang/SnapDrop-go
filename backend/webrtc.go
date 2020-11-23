@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/pion/webrtc/v2"
+	"github.com/pion/webrtc/v2/pkg/media"
 	vpxEncoder "github.com/poi5305/go-yuv2webRTC/vpx-encoder"
 )
 
@@ -32,6 +33,42 @@ type WebRTC struct {
 	vp8Track     *webrtc.Track
 	isConnected  bool
 	ImageChannel chan []byte
+}
+
+func (w *WebRTC) StopClient() {
+	fmt.Println("======Stop Client======")
+	w.isConnected = false
+	if w.encoder != nil {
+		w.encoder.Release()
+	}
+	if w.connection != nil {
+		w.connection.Close()
+	}
+	w.connection = nil
+}
+
+func (w *WebRTC) StartStreaming(vp8Track *webrtc.Track) {
+	fmt.Println("Start Streaming")
+	// send screenshots
+	go func() {
+		for w.isConnected {
+			yuv := <-w.ImageChannel
+			if len(w.encoder.Input) < cap(w.encoder.Input) {
+				w.encoder.Input <- yuv
+			}
+		}
+	}()
+
+	// receive frame buffer
+	go func() {
+		for i := 0; w.isConnected; i++ {
+			bs := <-w.encoder.Output
+			if i%10 == 0 {
+				fmt.Println("On frame ", len(bs), i)
+			}
+			w.vp8Track.WriteSample(media.Sample{Data: bs, Sample: 1})
+		}
+	}()
 }
 
 func getV8PlayLoadType(sdb string) (int, int) {
@@ -59,5 +96,25 @@ func Decode(in string, obj interface{}) {
 	}
 }
 
-func main() {
+func (w *WebRTC) IsConnected() bool {
+	return w.isConnected
+}
+
+func isPlanB(sdp string) bool {
+	lines := strings.Split(sdp, "\n")
+	for _, line := range lines {
+		if strings.Contains(line, "mid:video") || strings.Contains(line, "mid:audio") ||
+			strings.Contains(line, "mid:data") {
+			return true
+		}
+	}
+	return false
+}
+
+func Encode(obj interface{}) string {
+	b, err := json.Marshal(obj)
+	if err != nil {
+		panic(err)
+	}
+	return base64.StdEncoding.EncodeToString(b)
 }
