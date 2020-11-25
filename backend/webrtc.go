@@ -5,7 +5,9 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"math/rand"
 	"strings"
+	"time"
 
 	"github.com/pion/webrtc/v2"
 	"github.com/pion/webrtc/v2/pkg/media"
@@ -71,7 +73,7 @@ func (w *WebRTC) StartStreaming(vp8Track *webrtc.Track) {
 	}()
 }
 
-func getV8PlayLoadType(sdb string) (int, int) {
+func getV8PlayLoadType(sdp string) (int, int) {
 	lines := string.Split(sdp, "\n")
 	payloadType := 96
 	clockRate := 90000
@@ -117,4 +119,57 @@ func Encode(obj interface{}) string {
 		panic(err)
 	}
 	return base64.StdEncoding.EncodeToString(b)
+}
+
+func (w *WebRTC) StartClient(remoteSession string, width, height int) (string, error) {
+	defer func() {
+		if err := recover(); err != nil {
+			fmt.Println(err)
+			w.StopClient()
+		}
+	}()
+
+	// Reset client
+	if w.isConnected {
+		w.StopClient()
+		time.Sleep(2 * time.Second)
+	}
+
+	offer := webrtc.SessionDescription{}
+	Decode(remoteSession, &offer)
+
+	isPlanB := isPlanB(offer.SDP)
+
+	// Safari VP8 Payload default is not 96
+	payloadType, clockRate := getV8PlayLoadType(offer.SDP)
+	m := webrtc.MediaEngine{}
+	m.RegisterCodec(webrtc.NewRTPVP8Codec(uint8(payloadType), uint32(clockRate)))
+	api := webrtc.NewAPI(webrtc.WithMediaEngine(m))
+
+	if isPlanB {
+		config.SDPSemantics = webrtc.SDPSemanticsPlanB
+	} else {
+		config.SDPSemantics = webrtc.SDPSemanticsUnifiedPlan
+	}
+
+	encoder, err := vpxEncoder.NewVpxEncoder(width, height, 20, 1200, 5)
+	if err != nil {
+		return "", err
+	}
+	w.encoder = encoder
+
+	fmt.Println("======Start Client======")
+	conn, err := api.NewPeerConnection(config)
+	if err != nil {
+		return "", err
+	}
+
+	vp8Track, err := w.connection.NewTrack(uint8(payloadType), rand.Uint32(), "video", "robotmon")
+	if err != nil {
+		fmt.Println("Error: new xRobotmonScreen vp8 Track", err)
+		w.StopClient()
+		return "", err
+	}
+	_, err = w.connection.AddTrack(vp8Track)
+
 }
