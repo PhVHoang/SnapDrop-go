@@ -159,7 +159,7 @@ func (w *WebRTC) StartClient(remoteSession string, width, height int) (string, e
 	w.encoder = encoder
 
 	fmt.Println("======Start Client======")
-	conn, err := api.NewPeerConnection(config)
+	_, err := api.NewPeerConnection(config)
 	if err != nil {
 		return "", err
 	}
