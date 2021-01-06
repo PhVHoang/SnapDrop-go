@@ -111,7 +111,7 @@ func receiveTrack(peerConnection *webrtc.PeerConnection,
 }
 
 // user is the caller of the method
-// if user connects before peer: since user is first, user will create the channel and track and will pass the track to the channel
+// if user connects before peer: since user is first, user will create the channel and track, then pass the track to the channel
 // if peer connects before user: since peer came already, he created the channel and is listening and waiting for me to create and pass track
 func createTrack(peerConnection *webrtc.PeerConnection,
 	peerConnectionMap map[string]chan *webrtc.Track,

@@ -8,11 +8,16 @@ import (
 	"compress/gzip"
 	"encoding/base64"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"io"
 	"io/ioutil"
+	"net/http"
 	"os"
+	"strconv"
 	"strings"
+
+	"github.com/pion/randutil"
 )
 
 // Allows compressing offer/answer to bypass terminal input limits.
@@ -108,4 +113,35 @@ func unzip(in []byte) []byte {
 		panic(err)
 	}
 	return res
+}
+
+func RandSeq(n int) string {
+	val, err := randutil.GenerateCryptoRandomString(n, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
+	if err != nil {
+		panic(err)
+	}
+
+	return val
+}
+
+// HTTPSDPServer starts a HTTP Server that consumes SDPs
+func HTTPSDPServer() chan string {
+	port := flag.Int("port", 8080, "http server port")
+	flag.Parse()
+
+	sdpChan := make(chan string)
+	http.HandleFunc("/sdp", func(w http.ResponseWriter, r *http.Request) {
+		body, _ := ioutil.ReadAll(r.Body)
+		fmt.Fprintf(w, "done")
+		sdpChan <- string(body)
+	})
+
+	go func() {
+		err := http.ListenAndServe(":"+strconv.Itoa(*port), nil)
+		if err != nil {
+			panic(err)
+		}
+	}()
+
+	return sdpChan
 }
